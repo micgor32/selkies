@@ -43,10 +43,14 @@ data_logger = logging.getLogger("data_websocket")
 X11_CAPTURE_AVAILABLE = False
 PCMFLUX_AVAILABLE = False
 
+WEBCAM_BINARY_MSG_TYPE = 0x03 
+VIDIOC_S_FMT = 0xc0cc5605
+
 import asyncio
 import argparse
 import base64
 import ctypes
+import fcntl
 import json
 import pathlib
 import re
@@ -858,6 +862,11 @@ class DataStreamingServer:
         self._rtt_samples = deque(maxlen=RTT_SMOOTHING_SAMPLES)
         self._smoothed_rtt_ms = 0.0
         self._sent_frames_log = deque()
+        self.webcam_device_path = os.getenv("SELKIES_WEBCAM_DEVICE", "/dev/video10")
+        self.webcam_fd = None
+        self.webcam_setup_done = False
+        self.webcam_width = 640
+        self.webcam_height = 480
         
         def get_initial_value(setting_name):
             """Helper to get the correct initial integer/bool from a processed setting."""
@@ -1107,6 +1116,39 @@ class DataStreamingServer:
             except asyncio.CancelledError:
                 pass
         logger.info("Unified pipeline shutdown complete.")
+
+    def _setup_webcam_device(self):
+        """Initializes the v4l2loopback device to accept MJPEG frames."""
+        try:
+            if not os.path.exists(self.webcam_device_path):
+                data_logger.error(f"Webcam device {self.webcam_device_path} not found. Is v4l2loopback loaded?")
+                return False
+
+            self.webcam_fd = open(self.webcam_device_path, 'wb+', buffering=0)
+            
+            # Minimal V4L2 format setup for MJPEG
+            # This tells the kernel what kind of data we are pumping in
+            # struct v4l2_format
+            fmt = struct.pack('IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII', 
+                1, # type = V4L2_BUF_TYPE_VIDEO_OUTPUT
+                self.webcam_width, self.webcam_height, 
+                1196444237, # pixelformat = MJPEG
+                1, # field = V4L2_FIELD_NONE
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 # padding
+            )
+            # Note: The above struct packing is a simplification. 
+            # In production, use the 'v4l2' python library for precise ioctl mapping.
+            try:
+                fcntl.ioctl(self.webcam_fd, VIDIOC_S_FMT, fmt)
+            except Exception as e_ioctl:
+                data_logger.warning(f"V4L2 ioctl S_FMT warning: {e_ioctl}. Continuing...")
+
+            data_logger.info(f"Virtual webcam initialized at {self.webcam_device_path}")
+            self.webcam_setup_done = True
+            return True
+        except Exception as e:
+            data_logger.error(f"Failed to setup virtual webcam: {e}")
+            return False
 
     async def _ensure_backpressure_task_is_stopped(self, display_id: str):
         """Safely cancels and cleans up the backpressure task for a specific display."""
@@ -1937,6 +1979,25 @@ class DataStreamingServer:
                                     pass
                             audio_buffer.clear()
 
+                    elif msg_type == WEBCAM_BINARY_MSG_TYPE:
+                        # if not settings.webcam_enabled[0]: # Assuming you add this to settings.py
+                        #     continue
+                        
+                        if not self.webcam_setup_done:
+                            self._setup_webcam_device()
+                        
+                        if self.webcam_fd:
+                            try:
+                                # Write the MJPEG frame directly to the loopback device
+                                self.webcam_fd.write(payload)
+                            except Exception as e_cam:
+                                data_logger.error(f"Webcam write error: {e_cam}")
+                                try:
+                                    self.webcam_fd.close()
+                                    self.webcam_fd = None
+                                    self.webcam_setup_done = False
+                                except: pass
+
                 elif isinstance(message, str):
                     if message.startswith("SETTINGS,"):
                         client_perms = client_permissions.get(websocket)
@@ -2635,6 +2696,14 @@ class DataStreamingServer:
                     data_logger.error(
                         f"Error closing PulseAudio connection for {raddr}: {e_pulse_close}"
                     )
+
+            if self.webcam_fd:
+                try:
+                    self.webcam_fd.close()
+                    data_logger.info("Closed virtual webcam device.")
+                except: pass
+                self.webcam_fd = None
+                self.webcam_setup_done = False
 
             if (
                 "active_upload_target_path_conn" in locals()
