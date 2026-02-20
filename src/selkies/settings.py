@@ -96,7 +96,7 @@ COMMON_SETTING_DEFINITIONS = [
 
 SETTING_DEFINITIONS_WEBSOCKETS = [
     # Video & Encoder Settings
-    {'name': 'encoder', 'type': 'enum', 'default': 'x264enc', 'meta': {'allowed': ['x264enc', 'x264enc-striped', 'jpeg']}, 'help': 'The default video encoder.'},
+    {'name': 'encoder', 'type': 'enum', 'default': 'x264enc', 'meta': {'allowed': ['x265enc', 'x264enc', 'x264enc-striped', 'jpeg']}, 'help': 'The default video encoder.'},
     {'name': 'h264_crf', 'type': 'range', 'default': '5-50', 'meta': {'default_value': 25}, 'help': 'Allowed H.264 CRF range (e.g., "5-50") or a fixed value.'},
     {'name': 'jpeg_quality', 'type': 'range', 'default': '1-100', 'meta': {'default_value': 40}, 'help': 'Allowed JPEG quality range (e.g., "1-100") or a fixed value.'},
     {'name': 'h264_fullcolor', 'type': 'bool', 'default': False, 'help': 'Enable H.264 full color range for pixelflux encoders.'},
