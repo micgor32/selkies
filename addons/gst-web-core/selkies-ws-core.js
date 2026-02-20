@@ -79,6 +79,8 @@ let useCssScaling = false;
 let trackpadMode = false;
 let scalingDPI = 96;
 let antiAliasingEnabled = true;
+let clipboard_in_enabled = true;
+let clipboard_out_enabled = true;
 let use_browser_cursors = false;
 function applyEffectiveCursorSetting() {
     const userPreference = getBoolParam('use_browser_cursors', false);
@@ -391,6 +393,8 @@ if (displayId === 'display2') {
     use_browser_cursors = true;
 }
 enable_binary_clipboard = getBoolParam('enable_binary_clipboard', enable_binary_clipboard);
+clipboard_in_enabled = getBoolParam('clipboard_in_enabled', true);
+clipboard_out_enabled = getBoolParam('clipboard_out_enabled', true);
 setIntParam('framerate', framerate);
 setIntParam('h264_crf', h264_crf);
 setIntParam('jpeg_quality', jpeg_quality);
@@ -1897,6 +1901,7 @@ function receiveMessage(event) {
 }
 
 async function sendClipboardData(data, mimeType = 'text/plain') {
+    if (!window.clipboard_enabled || !clipboard_in_enabled) return;
     if (!websocket || websocket.readyState !== WebSocket.OPEN) {
         console.warn('Cannot send clipboard data: WebSocket is not open.');
         return;
@@ -2057,6 +2062,16 @@ function handleSettingsMessage(settings) {
     setBoolParam('enable_binary_clipboard', enable_binary_clipboard);
     settingsChanged = true;
   }
+  if (settings.clipboard_in_enabled !== undefined) {
+    clipboard_in_enabled = !!settings.clipboard_in_enabled;
+    setBoolParam('clipboard_in_enabled', clipboard_in_enabled);
+    settingsChanged = true;
+  }
+  if (settings.clipboard_out_enabled !== undefined) {
+    clipboard_out_enabled = !!settings.clipboard_out_enabled;
+    setBoolParam('clipboard_out_enabled', clipboard_out_enabled);
+    settingsChanged = true;
+  }
   if (settings.use_css_scaling !== undefined) {
     const messageData = { type: 'setUseCssScaling', value: !!settings.use_css_scaling };
     receiveMessage({ origin: window.location.origin, data: messageData });
@@ -2204,7 +2219,7 @@ document.addEventListener('DOMContentLoaded', () => {
   );
 
   window.addEventListener('focus', async () => {
-    if (isSharedMode || !window.clipboard_enabled) return;
+    if (isSharedMode || !window.clipboard_enabled || !clipboard_in_enabled) return;
 
     if (!enable_binary_clipboard) {
       navigator.clipboard
@@ -4351,6 +4366,7 @@ function uploadFileObject(file, pathToSend) {
       reject(new Error(errorMsg));
       return;
     }
+
     window.postMessage({
       type: 'fileUpload',
       payload: {
@@ -4359,10 +4375,17 @@ function uploadFileObject(file, pathToSend) {
         fileSize: file.size
       }
     }, window.location.origin);
+    
     websocket.send(`FILE_UPLOAD_START:${pathToSend}:${file.size}`);
+    
     let offset = 0;
     fileUploadProgressLastSent[pathToSend] = 0;
+    
+    const MAX_BUFFER_THRESHOLD = 10 * 1024 * 1024;
+    const BUFFER_CHECK_INTERVAL_MS = 50; 
+
     const reader = new FileReader();
+
     reader.onload = function(e) {
       if (!websocket || websocket.readyState !== WebSocket.OPEN) {
         const uploadErrorMsg = `WS closed during upload of ${pathToSend}`;
@@ -4370,6 +4393,7 @@ function uploadFileObject(file, pathToSend) {
         reject(new Error(uploadErrorMsg));
         return;
       }
+
       if (e.target.error) {
         const readErrorMsg = `File read error for ${pathToSend}: ${e.target.error}`;
         window.postMessage({ type: 'fileUpload', payload: { status: 'error', fileName: pathToSend, message: readErrorMsg }}, window.location.origin);
@@ -4377,14 +4401,17 @@ function uploadFileObject(file, pathToSend) {
         reject(e.target.error);
         return;
       }
+
       try {
-        const prefixedView = new Uint8Array(1 + e.target.result.byteLength);
+        const resultLen = e.target.result.byteLength;
+        const prefixedView = new Uint8Array(1 + resultLen);
         prefixedView[0] = 0x01;
         prefixedView.set(new Uint8Array(e.target.result), 1);
         websocket.send(prefixedView.buffer);
-        offset += e.target.result.byteLength;
+        offset += resultLen;
         const progress = file.size > 0 ? Math.round((offset / file.size) * 100) : 100;
         const now = Date.now();
+        
         if (now - fileUploadProgressLastSent[pathToSend] > FILE_UPLOAD_THROTTLE_MS) {
           window.postMessage({
             type: 'fileUpload',
@@ -4397,14 +4424,17 @@ function uploadFileObject(file, pathToSend) {
           }, window.location.origin);
           fileUploadProgressLastSent[pathToSend] = now;
         }
+
         if (offset < file.size) {
-          setTimeout(() => readChunk(offset), 0);
+          attemptNextRead(offset);
         } else {
           window.postMessage({
             type: 'fileUpload',
             payload: { status: 'progress', fileName: pathToSend, progress: 100, fileSize: file.size }
           }, window.location.origin);
+          
           websocket.send(`FILE_UPLOAD_END:${pathToSend}`);
+          
           window.postMessage({
             type: 'fileUpload',
             payload: {
@@ -4415,6 +4445,7 @@ function uploadFileObject(file, pathToSend) {
           }, window.location.origin);
           resolve();
         }
+
       } catch (wsError) {
         const sendErrorMsg = `WS send error during upload of ${pathToSend}: ${wsError.message || wsError}`;
         window.postMessage({ type: 'fileUpload', payload: { status: 'error', fileName: pathToSend, message: sendErrorMsg }}, window.location.origin);
@@ -4422,6 +4453,7 @@ function uploadFileObject(file, pathToSend) {
         reject(wsError);
       }
     };
+
     reader.onerror = function(e) {
       const generalReadError = `General file reader error for ${pathToSend}: ${e.target.error}`;
       window.postMessage({ type: 'fileUpload', payload: { status: 'error', fileName: pathToSend, message: generalReadError }}, window.location.origin);
@@ -4429,10 +4461,18 @@ function uploadFileObject(file, pathToSend) {
       reject(e.target.error);
     };
 
+    function attemptNextRead(currentOffset) {
+      if (websocket.bufferedAmount > MAX_BUFFER_THRESHOLD) {
+        setTimeout(() => attemptNextRead(currentOffset), BUFFER_CHECK_INTERVAL_MS);
+      } else {
+        readChunk(currentOffset);
+      }
+    }
+
     function readChunk(startOffset) {
       if (!websocket || websocket.readyState !== WebSocket.OPEN) {
         const chunkReadError = `WS closed before reading next chunk of ${pathToSend}`;
-         window.postMessage({ type: 'fileUpload', payload: { status: 'error', fileName: pathToSend, message: chunkReadError }}, window.location.origin);
+        window.postMessage({ type: 'fileUpload', payload: { status: 'error', fileName: pathToSend, message: chunkReadError }}, window.location.origin);
         reject(new Error(chunkReadError));
         return;
       }

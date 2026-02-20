@@ -11,10 +11,13 @@ ARG PY_BUILD_IMAGE=ghcr.io/selkies-project/selkies/py-build:main
 ARG WEB_IMAGE=ghcr.io/selkies-project/selkies/gst-web:main
 ARG JS_BASE_IMAGE=ghcr.io/selkies-project/selkies/js-interposer
 ARG JS_BASE_IMAGE_RELEASE=main
+ARG LIBUDEV_IMAGE=ghcr.io/selkies-project/selkies/fake-udev
+ARG LIBUDEV_IMAGE_RELEASE=main
 FROM ${GSTREAMER_BASE_IMAGE}:${GSTREAMER_BASE_IMAGE_RELEASE}-${DISTRIB_IMAGE}${DISTRIB_RELEASE} AS selkies
 FROM ${PY_BUILD_IMAGE} AS selkies-build
 FROM ${WEB_IMAGE} AS selkies-web
 FROM ${JS_BASE_IMAGE}:${JS_BASE_IMAGE_RELEASE}-${DISTRIB_IMAGE}${DISTRIB_RELEASE} AS selkies-js-interposer
+FROM ${LIBUDEV_IMAGE}:${LIBUDEV_IMAGE_RELEASE}-${DISTRIB_IMAGE}${DISTRIB_RELEASE} AS selkies-fake-udev
 FROM ${DISTRIB_IMAGE}:${DISTRIB_RELEASE}
 ARG DISTRIB_IMAGE
 ARG DISTRIB_RELEASE
@@ -213,6 +216,7 @@ Pin-Priority: -1" > /etc/apt/preferences.d/firefox-nosnap && \
         # Example packages
         git \
         tmux \
+        stterm \
         nano \
         vim \
         wget \
@@ -253,6 +257,13 @@ COPY --chown=1000:1000 --from=selkies-web /usr/share/nginx/html ./gst-web
 # Install Joystick Interposer
 COPY --chown=1000:1000 --from=selkies-js-interposer /opt/*.deb /opt/selkies-js-interposer.deb
 RUN apt-get update && apt-get install --no-install-recommends -y /opt/selkies-js-interposer.deb && rm -f /opt/selkies-js-interposer.deb && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* /var/cache/debconf/* /var/log/* /tmp/* /var/tmp/*
+
+# Install fake udev library, required for js interposer to work
+ARG LIBUDEV_PACKAGE=libudev
+ARG LIBUDEV_PKG_VERSION=0.0.0
+COPY --chown=1000:1000 --from=selkies-fake-udev /opt/${LIBUDEV_PACKAGE}_${LIBUDEV_PKG_VERSION}.deb /opt/libudev-fake.deb
+RUN apt-get update && apt-get install --no-install-recommends -y /opt/libudev-fake.deb && rm -f /opt/libudev-fake.deb && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /var/cache/debconf/* /var/log/* /tmp/* /var/tmp/*
 
 RUN echo "**** libva hack ****" && \

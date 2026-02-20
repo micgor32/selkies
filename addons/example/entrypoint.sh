@@ -10,12 +10,28 @@ set -e
 until [ -d "${XDG_RUNTIME_DIR}" ]; do sleep 0.5; done
 
 # Configure joystick interposer
-export SELKIES_INTERPOSER='/usr/$LIB/selkies_joystick_interposer.so'
-export LD_PRELOAD="${SELKIES_INTERPOSER}${LD_PRELOAD:+:${LD_PRELOAD}}"
+export LIB_PREFIX="/usr/\$LIB"
+export SELKIES_INTERPOSER="${LIB_PREFIX}/selkies_joystick_interposer.so"
+export LIBUDEV_PACKAGE="${LIBUDEV_PACKAGE:-libudev}"
+export LIBUDEV_PKG_VERSION="${LIBUDEV_PKG_VERSION:-0.0.0}"
+export FAKE_UDEV_LIB="${LIB_PREFIX}/${LIBUDEV_PACKAGE}.so.${LIBUDEV_PKG_VERSION}-fake"
+export LD_PRELOAD="${SELKIES_INTERPOSER}:${FAKE_UDEV_LIB}${LD_PRELOAD:+:${LD_PRELOAD}}"
 export SDL_JOYSTICK_DEVICE=/dev/input/js0
 mkdir -pm1777 /dev/input || sudo-root mkdir -pm1777 /dev/input || echo 'Failed to create joystick interposer directory'
-touch /dev/input/js0 /dev/input/js1 /dev/input/js2 /dev/input/js3 || sudo-root touch /dev/input/js0 /dev/input/js1 /dev/input/js2 /dev/input/js3 || echo 'Failed to create joystick interposer devices'
-chmod 777 /dev/input/js* || sudo-root chmod 777 /dev/input/js* || echo 'Failed to change permission for joystick interposer devices'
+
+if [ -d /dev/input ]; then
+  mknod /dev/input/js0 c 13 0 || sudo-root mknod /dev/input/js0 c 13 0 || echo "Failed to create joystick device file 0"
+  mknod /dev/input/js1 c 13 1 || sudo-root mknod /dev/input/js1 c 13 1 || echo "Failed to create joystick device file 1"
+  mknod /dev/input/js2 c 13 2 || sudo-root mknod /dev/input/js2 c 13 2 || echo "Failed to create joystick device file 2"
+  mknod /dev/input/js3 c 13 3 || sudo-root mknod /dev/input/js3 c 13 3 || echo "Failed to create joystick device file 3"
+  mknod /dev/input/event1000 c 13 1064 || sudo-root mknod /dev/input/event1000 c 13 1064 || echo "Failed to create event device file 1000"
+  mknod /dev/input/event1001 c 13 1065 || sudo-root mknod /dev/input/event1001 c 13 1065 || echo "Failed to create event device file 1001"
+  mknod /dev/input/event1002 c 13 1066 || sudo-root mknod /dev/input/event1002 c 13 1066 || echo "Failed to create event device file 1002"
+  mknod /dev/input/event1003 c 13 1067 || sudo-root mknod /dev/input/event1003 c 13 1067 || echo "Failed to create event device file 1003"
+  chmod 0666 /dev/input/js* /dev/input/event* || sudo-root chmod 0666 /dev/input/js* /dev/input/event* || echo "Failed to change permission for joystick interposer devices"
+else
+  echo "Skipping Joystick interposer device files creation since /dev/input is unavailable"
+fi
 
 # Set default display
 export DISPLAY="${DISPLAY:-:20}"

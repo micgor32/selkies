@@ -10,8 +10,12 @@ set -e
 until [ -d "${XDG_RUNTIME_DIR}" ]; do sleep 0.5; done
 
 # Configure joystick interposer
-export SELKIES_INTERPOSER='/usr/$LIB/selkies_joystick_interposer.so'
-export LD_PRELOAD="${SELKIES_INTERPOSER}${LD_PRELOAD:+:${LD_PRELOAD}}"
+export LIB_PREFIX="/usr/\$LIB"
+export SELKIES_INTERPOSER="${LIB_PREFIX}/selkies_joystick_interposer.so"
+export LIBUDEV_PACKAGE="${LIBUDEV_PACKAGE:-libudev}"
+export LIBUDEV_PKG_VERSION="${LIBUDEV_PKG_VERSION:-0.0.0}"
+export FAKE_UDEV_LIB="${LIB_PREFIX}/${LIBUDEV_PACKAGE}.so.${LIBUDEV_PKG_VERSION}-fake"
+export LD_PRELOAD="${SELKIES_INTERPOSER}:${FAKE_UDEV_LIB}${LD_PRELOAD:+:${LD_PRELOAD}}"
 export SDL_JOYSTICK_DEVICE=/dev/input/js0
 
 # Set default display

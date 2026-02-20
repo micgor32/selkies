@@ -3603,11 +3603,18 @@ async def ws_entrypoint():
     )
     app.data_streaming_server = data_server
 
+    clipboard_mode = "false"
+    if settings.clipboard_enabled[0]:
+        c_in, c_out = settings.clipboard_in_enabled[0], settings.clipboard_out_enabled[0]
+        if c_in and c_out: clipboard_mode = "true"
+        elif c_in: clipboard_mode = "in"
+        elif c_out: clipboard_mode = "out"
+
     input_handler = InputHandler(
         app,
         UINPUT_MOUSE_SOCKET,
         JS_SOCKET_PATH,
-        str(settings.clipboard_enabled[0]).lower(),
+        clipboard_mode,
         str(settings.enable_binary_clipboard[0]).lower(),
         ENABLE_CURSORS,
         CURSOR_SIZE,

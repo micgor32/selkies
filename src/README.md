@@ -196,6 +196,8 @@ The table below lists all available server settings.
 | `SELKIES_MICROPHONE_ENABLED` | `--microphone-enabled` | `True` | Enable client-to-server microphone forwarding. |
 | `SELKIES_GAMEPAD_ENABLED` | `--gamepad-enabled` | `True` | Enable gamepad support. |
 | `SELKIES_CLIPBOARD_ENABLED` | `--clipboard-enabled` | `True` | Enable clipboard synchronization. |
+| `SELKIES_CLIPBOARD_IN_ENABLED` | `--clipboard-in-enabled` | `True` | Enable client-to-server clipboard synchronization (ignored if `SELKIES_CLIPBOARD_ENABLED` is false). |
+| `SELKIES_CLIPBOARD_OUT_ENABLED` | `--clipboard-out-enabled` | `True` | Enable server-to-client clipboard synchronization (ignored if `SELKIES_CLIPBOARD_ENABLED` is false). |
 | `SELKIES_COMMAND_ENABLED` | `--command-enabled` | `True` | Enable parsing of command websocket messages. |
 | `SELKIES_FILE_TRANSFERS` | `--file-transfers` | `'upload,download'` | Allowed file transfer directions (comma-separated: "upload,download"). Set to "" or "none" to disable. |
 | `SELKIES_ENCODER` | `--encoder` | `'x264enc'` | The default video encoder. |

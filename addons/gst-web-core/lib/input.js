@@ -1420,6 +1420,14 @@ export class Input {
             }
         }
 
+        if ((browser.isMac() || browser.isIOS()) && keysym === KeyTable.XK_ISO_Level3_Shift) {
+            console.log(`macOS: AltRight pressed, sending ISO_Level3_Shift momentarily`);
+            this._sendKeyEvent(KeyTable.XK_ISO_Level3_Shift, code, true);
+            this._sendKeyEvent(KeyTable.XK_ISO_Level3_Shift, code, false);
+            _stopEvent(event);
+            return;
+        }
+
         if (code in this._keyDownList) { // Key already pressed
             keysym = this._keyDownList[code];
         }

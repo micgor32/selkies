@@ -40,6 +40,8 @@ COMMON_SETTING_DEFINITIONS = [
     {'name': 'microphone_enabled', 'type': 'bool', 'default': True, 'help': 'Enable client-to-server microphone forwarding.'},
     {'name': 'gamepad_enabled', 'type': 'bool', 'default': True, 'help': 'Enable gamepad support.'},
     {'name': 'clipboard_enabled', 'type': 'bool', 'default': True, 'help': 'Enable clipboard synchronization.'},
+    {'name': 'clipboard_in_enabled', 'type': 'bool', 'default': True, 'help': 'Enable client-to-server clipboard synchronization.'},
+    {'name': 'clipboard_out_enabled', 'type': 'bool', 'default': True, 'help': 'Enable server-to-client clipboard synchronization.'},
     {'name': 'command_enabled', 'type': 'bool', 'default': True, 'help': 'Enable parsing of command websocket messages.'},
     {'name': 'file_transfers', 'type': 'list', 'default': 'upload,download', 'meta': {'allowed': ['upload', 'download']}, 'help': 'Allowed file transfer directions (comma-separated: "upload,download"). Set to "" or "none" to disable.'},
     {'name': 'framerate', 'type': 'range', 'default': '8-120', 'meta': {'default_value': 60}, 'help': 'Allowed framerate range (e.g., "8-165") or a fixed value (e.g., "60").'},
